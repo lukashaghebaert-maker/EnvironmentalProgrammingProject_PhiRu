@@ -6,3 +6,5 @@ Created on Tue Oct 21 14:03:49 2025
 """
 
 #THIS IS THE SAMPLE CODE!
+
+print('ang galing ng group na to!')
