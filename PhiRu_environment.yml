@@ -1,0 +1,7 @@
+name: PhiRuProject
+channels:
+  - defaults
+dependencies:
+  - pandas
+  - geopandas
+prefix: C:\PROGRAMSIUPWARE\Anaconda\envs\PhiRuProject
