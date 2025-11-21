@@ -5,7 +5,7 @@ Created on Mon Nov 10 13:47:07 2025
 @author: PhiRu
 """
 import sqlite3
-
+import panda as pd
 
 #putting the name of the file in one variable
 db_file = "impactdb.v1.0.2.dg_filled.db"  # por ejemplo "data.db"
