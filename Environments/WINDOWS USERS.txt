@@ -1,3 +1,5 @@
 conda env create -f PhiRuProject_Win.yml
 
 (FILE MUST BE IN THE SAME DIRECTORY!)
+
+conda activate PhiRuProject

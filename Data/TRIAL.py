@@ -87,14 +87,32 @@ L3_Damage_TC = fill_dates(L3_Damage_TC)
 
 
 
-
-#4----------
-#group_cols = ["Event_ID", "Administrative_Area_GID"] + date_cols
-#grouped_deaths = L3_Deaths_TC.groupby(group_cols)
-#L3_Deaths_aggregated = grouped_deaths["Num_Max"].sum()
-#L3_Deaths_aggregated = L3_Deaths_aggregated.reset_index()
+#4---------- Aggregate by Administrative Area
 
 
+def aggregate_L3_by_admin(df):
+
+    group_cols = ["Event_ID", "Administrative_Area_GID"]
+    aggregated = df.groupby(group_cols, as_index=False).agg("first")
+
+    for col in df.columns:
+        if col not in group_cols and df[col].dtype != object:
+            aggregated[col] = df.groupby(group_cols)[col].sum().values
+
+    return aggregated
+
+L3_Deaths_TC_aggregated   = aggregate_L3_by_admin(L3_Deaths_TC)
+L3_Injuries_TC_aggregated = aggregate_L3_by_admin(L3_Injuries_TC)
+L3_Damage_TC_aggregated   = aggregate_L3_by_admin(L3_Damage_TC)
+
+#----------5-
+
+def filter_after_1900(df):
+    return df[df["Start_Date_Year"] > 1900].copy()
+
+L3_Deaths_TC_aggregated_1900   = filter_after_1900(L3_Deaths_TC_aggregated)
+L3_Injuries_TC_aggregated_1900 = filter_after_1900(L3_Injuries_TC_aggregated)
+L3_Damage_TC_aggregated_1900   = filter_after_1900(L3_Damage_TC_aggregated)
 
 
 #5------
