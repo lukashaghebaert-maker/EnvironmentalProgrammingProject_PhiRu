@@ -1,7 +1,7 @@
 
 import sqlite3
 import pandas as pd
-
+import numpy as np
 #1-------
 db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- your path
 conn = sqlite3.connect(db_path)
@@ -10,9 +10,7 @@ conn = sqlite3.connect(db_path)
 #2------- 
 # List all tables
 tables = pd.read_sql(
-    "SELECT name FROM sqlite_master WHERE type='table';", conn
-)
-print(tables)
+    "SELECT name FROM sqlite_master WHERE type='table';", conn)
 
 total_tables = tables[tables["name"].str.startswith("Total")]["name"]
 
@@ -28,7 +26,6 @@ L1 = pd.concat(L1_list, ignore_index=True)
 
 #2(L3)--------
 spec_tables = tables[tables["name"].str.startswith("Specific")]["name"].tolist()
-print(spec_tables)
 
 L3 = {}  # dictionary of category -> dataframe
 
@@ -88,31 +85,14 @@ L3_Damage_TC = fill_dates(L3_Damage_TC)
 
 
 #4---------- Aggregate by Administrative Area
+def filter_year(df, year):
+    return df[df["Start_Date_Year"]>year].copy()
 
-
-def aggregate_L3_by_admin(df):
-
-    group_cols = ["Event_ID", "Administrative_Area_GID"]
-    aggregated = df.groupby(group_cols, as_index=False).agg("first")
-
-    for col in df.columns:
-        if col not in group_cols and df[col].dtype != object:
-            aggregated[col] = df.groupby(group_cols)[col].sum().values
-
-    return aggregated
-
-L3_Deaths_TC_aggregated   = aggregate_L3_by_admin(L3_Deaths_TC)
-L3_Injuries_TC_aggregated = aggregate_L3_by_admin(L3_Injuries_TC)
-L3_Damage_TC_aggregated   = aggregate_L3_by_admin(L3_Damage_TC)
+L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, 1900)
+L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
+L3_Damage_TC_1900 = filter_year(L3_Damage_TC, 1900)
 
 #----------5-
-
-def filter_after_1900(df):
-    return df[df["Start_Date_Year"] > 1900].copy()
-
-L3_Deaths_TC_aggregated_1900   = filter_after_1900(L3_Deaths_TC_aggregated)
-L3_Injuries_TC_aggregated_1900 = filter_after_1900(L3_Injuries_TC_aggregated)
-L3_Damage_TC_aggregated_1900   = filter_after_1900(L3_Damage_TC_aggregated)
 
 
 #5------
