@@ -1,11 +1,10 @@
-
 import sqlite3
 import pandas as pd
 import numpy as np
+
 #1-------
 db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- your path
 conn = sqlite3.connect(db_path)
-
 
 #2------- 
 # List all tables
@@ -92,7 +91,71 @@ L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, 1900)
 L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
 L3_Damage_TC_1900 = filter_year(L3_Damage_TC, 1900)
 
-#----------5-
+#----------5
+#I AM STILL FIXING THIS CODE BECAUSE THIS IS ADDING UP YEARS (currently clarifying with Ni if we would consider min or max)
+import ast  # This library turns string "[...]" into list [...]
 
+def get_single_valid_gid(gid_entry):
+    #1 Handle NaNs (NO DATA)
+    if pd.isna(gid_entry): 
+        return np.nan
+
+    #2 Fix "String that look like Lists"
+    # If it looks like a list but is a string "['CHN']", convert it.
+    if isinstance(gid_entry, str) and gid_entry.startswith('[') and gid_entry.endswith(']'):
+        try:
+            gid_entry = ast.literal_eval(gid_entry) #ast.literal_eval converts it to a list
+        except (ValueError, SyntaxError):
+            pass # Keep it as is if conversion fails
+
+    #3 Standardize to List
+    if not isinstance(gid_entry, list):
+        elements = [str(gid_entry)]
+    else:
+        elements = [str(e) for e in gid_entry if pd.notna(e)]
+
+    valid_codes = []
+    for e in elements:
+        # Clean formatting: remove whitespace, take first 3 chars, uppercase
+        # 'AUS.10' -> 'AUS'
+        code = e.strip()[:3]
+            #e.strip removes accidental spaces
+            #:3 chops the string at the third letter
+        
+        # Validation Rule: 
+        # Must be exactly 3 letters. 
+        # numeric_only=True logic handles the 'Z03' exclusion (digits make isalpha False)
+        if len(code) == 3 and code.isalpha(): #
+            valid_codes.append(code)
+    
+    # 4. Enforce "Single Valid GID"
+    if len(valid_codes) == 1:
+        return valid_codes[0]
+    else:
+        return np.nan
+
+def process_step_5(df):
+    df_clean = df.copy()
+    
+    # Debug: Print before cleaning to see what we are dealing with
+    print(f"Rows before cleaning: {len(df_clean)}")
+    
+    df_clean['Administrative_Area_GID'] = df_clean['Administrative_Area_GID'].apply(get_single_valid_gid)
+    
+    # Filter out the NaNs
+    df_clean = df_clean.dropna(subset=['Administrative_Area_GID'])
+    
+    # Debug: Print after cleaning
+    print(f"Rows after cleaning: {len(df_clean)}")
+
+    # Aggregate
+    df_agg = df_clean.groupby(['Event_ID', 'Administrative_Area_GID']).sum(numeric_only=True).reset_index()
+    
+    return df_agg
+
+# --- Run Again ---
+L3_Deaths_TC_1900_aggregated = process_step_5(L3_Deaths_TC_1900)
+L3_Damage_TC_1900_aggregated = process_step_5(L3_Damage_TC_1900)
+L3_Injuries_Damage_TC_1900_aggregated = process_step_5(L3_Injuries_TC_1900)
 
 #5------
