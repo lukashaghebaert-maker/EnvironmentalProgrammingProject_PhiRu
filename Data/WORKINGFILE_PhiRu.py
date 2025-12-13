@@ -11,12 +11,12 @@ conn = sqlite3.connect(db_path)
 tables = pd.read_sql(
     "SELECT name FROM sqlite_master WHERE type='table';", conn)
 
-total_tables = tables[tables["name"].str.startswith("Total")]["name"]
+all_total_tables = tables[tables["name"].str.startswith("Total")]["name"]
 
 #2(L1)-------
 # Concatenate to one big L1 dataframe
 L1_list = []
-for table_name in total_tables:
+for table_name in all_total_tables:
     df = pd.read_sql(f"SELECT * FROM {table_name};", conn)
     df["source_table"] = table_name
     L1_list.append(df)
@@ -53,11 +53,15 @@ L3_Damage = L3.get("Damage")
 
 
 #3-----
-L1_TC = L1[L1["Main_Event"] == "Tropical Storm/Cyclone"].copy()
+
+filter_criteria = L1["Main_Event"] == "Tropical Storm/Cyclone"
+L1_TC = L1[filter_criteria].copy() #Copy is very imprtant to ensure original data isn't altered
+
+
 tc_events = L1_TC["Event_ID"].unique()
 
 def filter_L3_tc(df):
-    return df[df["Event_ID"].isin(tc_events)].copy()
+    return df[df["Event_ID"].isin(tc_events)].copy() #compact versin of boolean mask above
 
 L3_Deaths_TC = filter_L3_tc(L3_Deaths)
 L3_Injuries_TC = filter_L3_tc(L3_Injuries)
@@ -85,7 +89,16 @@ L3_Damage_TC = fill_dates(L3_Damage_TC)
 
 #4---------- Aggregate by Administrative Area
 def filter_year(df, year):
-    return df[df["Start_Date_Year"]>year].copy()
+    
+    ''' Filters the data frame according to the year you input. 
+    The filter keeps everything after the year specified 
+    (e.g. x>1900) '''
+    
+    if type(year) == int:
+        year_mask = df["Start_Date_Year"]>year
+        return df[year_mask].copy()
+    else:
+        print ("Year must be an int data type")
 
 L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, 1900)
 L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
