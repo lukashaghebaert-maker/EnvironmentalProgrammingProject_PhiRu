@@ -92,70 +92,95 @@ L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
 L3_Damage_TC_1900 = filter_year(L3_Damage_TC, 1900)
 
 #----------5
-#I AM STILL FIXING THIS CODE BECAUSE THIS IS ADDING UP YEARS (currently clarifying with Ni if we would consider min or max)
-import ast  # This library turns string "[...]" into list [...]
+import ast          # This library turns string "[...]" into list [...]
 
-def get_single_valid_gid(gid_entry):
-    #1 Handle NaNs (NO DATA)
+#1.GID CLEANING FUNCTION (Applied to one cell at a time)
+def get_single_valid_gid(gid_entry): # Checks every single GID at a time
+    
+    # Handle no data cells and returns it as NaNs
     if pd.isna(gid_entry): 
-        return np.nan
+        return np.nan # Returns NaN if the cell is truly empty
 
-    #2 Fix "String that look like Lists"
-    # If it looks like a list but is a string "['CHN']", convert it.
+# Currently the data that is GID is considered a string, we use this to fix strings and convert it to python list
     if isinstance(gid_entry, str) and gid_entry.startswith('[') and gid_entry.endswith(']'):
         try:
-            gid_entry = ast.literal_eval(gid_entry) #ast.literal_eval converts it to a list
+            gid_entry = ast.literal_eval(gid_entry) # ast.literal_eval safely converts the text into a real Python list
         except (ValueError, SyntaxError):
-            pass # Keep it as is if conversion fails
+            pass # If the string cannot be converted, ignore the error and proceed
 
-    #3 Standardize to List
-    if not isinstance(gid_entry, list):
-        elements = [str(gid_entry)]
-    else:
-        elements = [str(e) for e in gid_entry if pd.notna(e)]
+# Make sure all variable elements is a list of strings
+    if not isinstance(gid_entry, list): # If the entry is NOT a list (ex: a single string like 'USA'), execute this block
+        elements = [str(gid_entry)] # Wrap the single item in a list so we can loop over it
+    else: # If the entry is a list, execute this block
+        elements = [str(e) for e in gid_entry if pd.notna(e)] #Ensure every item in the list is a string and ignore any NaNs inside the list
 
-    valid_codes = []
-    for e in elements:
-        # Clean formatting: remove whitespace, take first 3 chars, uppercase
-        # 'AUS.10' -> 'AUS'
-        code = e.strip()[:3]
-            #e.strip removes accidental spaces
-            #:3 chops the string at the third letter
+    valid_codes = [] # Start an empty list to store valid country codes
+    
+    for e in elements: # Loop through every item in the cleaned list (e.g., 'Z03', 'CHN')
+        # Clean formatting: remove whitespace, take first 3 chars, force UPPERCASE
+        # 'AUS.10' -> 'AUS', 'chn' -> 'CHN'
+        code = e.strip()[:3].upper() # Apply the cleaning and standardization
         
         # Validation Rule: 
-        # Must be exactly 3 letters. 
-        # numeric_only=True logic handles the 'Z03' exclusion (digits make isalpha False)
-        if len(code) == 3 and code.isalpha(): #
-            valid_codes.append(code)
+        # Must be exactly 3 letters AND contain only letters (this excludes codes like 'Z03')
+        if len(code) == 3 and code.isalpha(): 
+            valid_codes.append(code) # If it passes the test, add it to our "Good List"
     
     # 4. Enforce "Single Valid GID"
-    if len(valid_codes) == 1:
-        return valid_codes[0]
+    if len(valid_codes) == 1: # Check if we found exactly one valid country code
+        return valid_codes[0] # If yes, return the code (e.g., 'CHN')
     else:
-        return np.nan
+        return np.nan # If zero or multiple valid codes were found, return NaN (Discard the row)
 
+# --- 2. THE MAIN PROCESSING AND AGGREGATION FUNCTION ---
 def process_step_5(df):
-    df_clean = df.copy()
+    df_clean = df.copy() # Create a copy of the input data to work on safely
     
     # Debug: Print before cleaning to see what we are dealing with
     print(f"Rows before cleaning: {len(df_clean)}")
     
-    df_clean['Administrative_Area_GID'] = df_clean['Administrative_Area_GID'].apply(get_single_valid_gid)
+    # A. Clean the GID column
+    # Apply the complex cleaning function to every row in the 'Administrative_Area_GID' column
+    df_clean['Administrative_Area_GID'] = df_clean['Administrative_Area_GID'].apply(get_single_valid_gid) 
     
-    # Filter out the NaNs
-    df_clean = df_clean.dropna(subset=['Administrative_Area_GID'])
+    # B. Filter out the NaNs
+    # Remove any row where the GID cleaning process returned NaN (discarding bad/multiple GID rows)
+    df_clean = df_clean.dropna(subset=['Administrative_Area_GID']) 
     
     # Debug: Print after cleaning
     print(f"Rows after cleaning: {len(df_clean)}")
 
-    # Aggregate
-    df_agg = df_clean.groupby(['Event_ID', 'Administrative_Area_GID']).sum(numeric_only=True).reset_index()
+    # --- C. FIXED AGGREGATION LOGIC (Prevents adding years) ---
+    
+    # 1. Define the columns we are grouping by
+    group_cols = ['Event_ID', 'Administrative_Area_GID'] # The keys that must be identical to form a group
+    
+    # 2. Create the "Rule Book" for aggregation
+    agg_rules = {} # This dictionary tells Pandas what math to do for each column
+    
+    # Loop through every column to decide what to do with it
+    for col in df_clean.columns:
+        if col in group_cols:
+            continue # Skip the grouping keys—they are handled automatically by groupby
+            
+        # If it is a Numerical Impact column -> SUM it
+        if col in ['Num_Min', 'Num_Max', 'Num_Approx']:
+            agg_rules[col] = 'sum' # Add the numbers together
+            
+        # For Dates and everything else -> KEEP FIRST value
+        # (This prevents adding 1992 + 1992)
+        else:
+            agg_rules[col] = 'first' # Just take the first value found in the group
+
+    # 3. Apply the rules
+    # Groups the rows, applies the specific SUM/FIRST rules, and flattens the result
+    df_agg = df_clean.groupby(group_cols).agg(agg_rules).reset_index()
     
     return df_agg
 
 # --- Run Again ---
+# Execute the process on each of your filtered dataframes:
 L3_Deaths_TC_1900_aggregated = process_step_5(L3_Deaths_TC_1900)
 L3_Damage_TC_1900_aggregated = process_step_5(L3_Damage_TC_1900)
 L3_Injuries_Damage_TC_1900_aggregated = process_step_5(L3_Injuries_TC_1900)
-
 #5------
