@@ -132,7 +132,7 @@ def get_single_valid_gid(gid_entry): # Checks every single GID at a time
     else:
         return np.nan # If zero or multiple valid codes were found, return NaN (Discard the row)
 
-# --- 2. THE MAIN PROCESSING AND AGGREGATION FUNCTION ---
+# --- MAIN PROCESSING AND AGGREGATION FUNCTION ---
 def process_step_5(df):
     df_clean = df.copy() # Create a copy of the input data to work on safely
     
