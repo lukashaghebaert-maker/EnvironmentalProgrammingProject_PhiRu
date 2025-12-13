@@ -99,10 +99,11 @@ def filter_year(df, year):
         return df[year_mask].copy()
     else:
         print ("Year must be an int data type")
-
-L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, 1900)
-L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
-L3_Damage_TC_1900 = filter_year(L3_Damage_TC, 1900)
+        
+year_to_filter = 1900
+L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, year_to_filter)
+L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, year_to_filter)
+L3_Damage_TC_1900 = filter_year(L3_Damage_TC, year_to_filter)
 
 #----------5
 import ast          # This library turns string "[...]" into list [...]
