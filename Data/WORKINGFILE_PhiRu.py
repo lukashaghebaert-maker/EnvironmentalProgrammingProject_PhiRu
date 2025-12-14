@@ -1,6 +1,7 @@
 import sqlite3
 import pandas as pd
 import numpy as np
+import ast # This library turns string "[...]" into list [...]
 
 #1-------
 db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- your path
@@ -44,8 +45,8 @@ for table_name in spec_tables: #for each table that starts with specific
     L3.setdefault(category, []).append(df)
 
 # Get only Deaths, Injuries and Damage
-for cat in L3:
-    L3[cat] = pd.concat(L3[cat], ignore_index=True)
+for category in L3:
+    L3[category] = pd.concat(L3[category], ignore_index=True)
 
 L3_Deaths = L3.get("Deaths")
 L3_Injuries = L3.get("Injuries")
@@ -92,64 +93,138 @@ L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, 1900)
 L3_Damage_TC_1900 = filter_year(L3_Damage_TC, 1900)
 
 #----------5
-import ast          # This library turns string "[...]" into list [...]
 
 #1.GID CLEANING FUNCTION (Applied to one cell at a time)
-def get_single_valid_gid(gid_entry): # Checks every single GID at a time
+#def get_single_valid_gid(gid_entry):  # Checks every single GID at a time
     
-    # Handle no data cells and returns it as NaNs
-    if pd.isna(gid_entry): 
-        return np.nan # Returns NaN if the cell is truly empty
+    # 1. Handle empty or missing cells → return NaN
+#    if pd.isna(gid_entry):
+#        return np.nan  # Returns NaN if the cell is truly empty
 
-# Currently the data that is GID is considered a string, we use this to fix strings and convert it to python list
-    if isinstance(gid_entry, str) and gid_entry.startswith('[') and gid_entry.endswith(']'):
+def get_single_valid_gid(gid_entry):
+
+    # 1. Handle empty or missing cells → return NaN
+    if gid_entry is None or (isinstance(gid_entry, float) and np.isnan(gid_entry)):
+        return np.nan
+
+    # 2. Convert strings that LOOK like lists into real Python lists
+    #    Examples:
+    #    "['USA']"      → ['USA']
+    #    "[['USA']]"    → [['USA']]
+    #    "USA"          → stays as "USA"
+    if isinstance(gid_entry, str):
         try:
-            gid_entry = ast.literal_eval(gid_entry) # ast.literal_eval safely converts the text into a real Python list
+            parsed = ast.literal_eval(gid_entry)  # Safely convert string → Python object
+            # If literal_eval returns a list, use it
+            if isinstance(parsed, list):
+                gid_entry = parsed
         except (ValueError, SyntaxError):
-            pass # If the string cannot be converted, ignore the error and proceed
+            # If literal_eval fails, treat the string as a single element
+            gid_entry = [gid_entry]
 
-# Make sure all variable elements is a list of strings
-    if not isinstance(gid_entry, list): # If the entry is NOT a list (ex: a single string like 'USA'), execute this block
-        elements = [str(gid_entry)] # Wrap the single item in a list so we can loop over it
-    else: # If the entry is a list, execute this block
-        elements = [str(e) for e in gid_entry if pd.notna(e)] #Ensure every item in the list is a string and ignore any NaNs inside the list
-
-    valid_codes = [] # Start an empty list to store valid country codes
-    
-    for e in elements: # Loop through every item in the cleaned list (e.g., 'Z03', 'CHN')
-        # Clean formatting: remove whitespace, take first 3 chars, force UPPERCASE
-        # 'AUS.10' -> 'AUS', 'chn' -> 'CHN'
-        code = e.strip()[:3].upper() # Apply the cleaning and standardization
-        
-        # Validation Rule: 
-        # Must be exactly 3 letters AND contain only letters (this excludes codes like 'Z03')
-        if len(code) == 3 and code.isalpha(): 
-            valid_codes.append(code) # If it passes the test, add it to our "Good List"
-    
-    # 4. Enforce "Single Valid GID"
-    if len(valid_codes) == 1: # Check if we found exactly one valid country code
-        return valid_codes[0] # If yes, return the code (e.g., 'CHN')
+    # 3. Ensure the entry is ALWAYS treated as a list of strings
+    #    Cases handled:
+    #    - gid_entry = "USA"        → ['USA']
+    #    - gid_entry = ['USA']      → ['USA']
+    #    - gid_entry = [['USA']]    → ['USA']
+    if isinstance(gid_entry, str):
+        elements = [gid_entry]  # Wrap single string in a list
     else:
-        return np.nan # If zero or multiple valid codes were found, return NaN (Discard the row)
+        # If it's a list, flatten and ensure all elements are strings
+        # Example: [['USA']] → ['USA']
+        flat_list = []
+        for e in gid_entry:
+            if isinstance(e, list):
+                flat_list.extend(e)  # Flatten nested lists
+            else:
+                flat_list.append(e)
+        # Convert all elements to strings and remove NaNs
+        elements = [str(e) for e in flat_list if pd.notna(e)]
+
+    # 4. Extract valid 3-letter country codes
+    valid_codes = []  # Start an empty list to store valid country codes
+    
+    for e in elements:  # Loop through every cleaned element
+        # Clean formatting: remove whitespace, take first 3 chars, force UPPERCASE
+        # Examples:
+        #   'AUS.10' → 'AUS'
+        #   'chn'    → 'CHN'
+        code = e.strip()[:3].upper()
+
+        # Validation rule:
+        # Must be exactly 3 letters AND contain only letters
+        if len(code) == 3 and code.isalpha():
+            valid_codes.append(code)
+
+    # 5. Enforce "Single Valid GID"
+    #    Only accept rows with EXACTLY ONE valid country code
+    if len(valid_codes) == 1:
+        return valid_codes[0]  # Return the clean code (e.g., 'CHN')
+    else:
+        return np.nan  # If zero or multiple codes found → discard row
 
 # --- MAIN PROCESSING AND AGGREGATION FUNCTION ---
-def process_step_5(df):
-    df_clean = df.copy() # Create a copy of the input data to work on safely
+def clean_dataframe(df):
+    df_clean = df.copy()
+
+    # 1. IDENTIFY THE COLUMN
+    if 'Administrative_Area_GID' in df_clean.columns:
+        target_col = 'Administrative_Area_GID'
+
+        print("TARGET COLUMN:", target_col)
+        print("FIRST VALUES:\n", df_clean[target_col].head())
+        print("COLUMN DTYPE:", df_clean[target_col].dtype)
+        print("PYTHON TYPE OF VALUE:", type(df_clean[target_col].iloc[2]))
+
+    elif 'Administrative_Areas_GID' in df_clean.columns:
+        target_col = 'Administrative_Areas_GID'
+
+        #Step 1: Convert string "[['USA']]" → [['USA']]
+        df_clean[target_col] = df_clean[target_col].apply(
+            lambda x: ast.literal_eval(x) if isinstance(x, str) else x
+        )
+
+        #Step 2: Flatten [['USA']] → ['USA']
+        df_clean[target_col] = df_clean[target_col].apply(
+            lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
+        )
+
+        #Step 3: Convert ['USA'] → "['USA']" (string)
+        df_clean[target_col] = df_clean[target_col].apply(
+            lambda x: str([x]) if isinstance(x, str) else x
+        )
+
+        print("TARGET COLUMN:", target_col)
+        print("FIRST VALUES:\n", df_clean[target_col].head())
+        print("COLUMN DTYPE:", df_clean[target_col].dtype)
+        print("PYTHON TYPE OF VALUE:", type(df_clean[target_col].iloc[2]))
+
+    else:
+        print("Error: Neither GID column found.")
+        return df_clean
+
+    #return df_clean
+    
+    # Debug: Confirm which column is being used
+    print(f"Detected column: {target_col}")
     
     # Debug: Print before cleaning to see what we are dealing with
     print(f"Rows before cleaning: {len(df_clean)}")
     
     # A. Clean the GID column
     # Apply the complex cleaning function to every row in the 'Administrative_Area_GID' column
-    df_clean['Administrative_Area_GID'] = df_clean['Administrative_Area_GID'].apply(get_single_valid_gid) 
+    df_clean[target_col] = df_clean[target_col].apply(get_single_valid_gid) 
     
     # B. Filter out the NaNs
     # Remove any row where the GID cleaning process returned NaN (discarding bad/multiple GID rows)
-    df_clean = df_clean.dropna(subset=['Administrative_Area_GID']) 
+    df_clean = df_clean.dropna(subset=[target_col]) 
     
     # Debug: Print after cleaning
     print(f"Rows after cleaning: {len(df_clean)}")
+    return df_clean
 
+
+def aggregate_by_eventID(df_clean):
     # --- C. FIXED AGGREGATION LOGIC (Prevents adding years) ---
     
     # 1. Define the columns we are grouping by
@@ -180,7 +255,38 @@ def process_step_5(df):
 
 # --- Run Again ---
 # Execute the process on each of your filtered dataframes:
-L3_Deaths_TC_1900_aggregated = process_step_5(L3_Deaths_TC_1900)
-L3_Damage_TC_1900_aggregated = process_step_5(L3_Damage_TC_1900)
-L3_Injuries_Damage_TC_1900_aggregated = process_step_5(L3_Injuries_TC_1900)
+L3_Deaths_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Deaths_TC_1900))
+L3_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Damage_TC_1900))
+L3_Injuries_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Injuries_TC_1900))
 #5------
+
+#6-------
+
+instance_tables = tables[tables["name"].str.startswith("Instance")]["name"].tolist()
+
+L2 = {}  # dictionary of category -> dataframe
+
+for table_name in instance_tables: #for each table that starts with instance
+    #classifyinging tables into three impacts deaths, injuries & damage
+    if "Deaths" in table_name:
+        category = "Deaths"
+    elif "Injuries" in table_name:
+        category = "Injuries"
+    elif "Damage" in table_name:
+        category = "Damage"
+    else:
+        continue
+
+    df = pd.read_sql(f"SELECT * FROM {table_name};", conn)
+    df["source_table"] = table_name
+    L2.setdefault(category, []).append(df)
+
+# Get only Deaths, Injuries and Damage
+for category in L2:
+    L2[category] = pd.concat(L2[category], ignore_index=True)
+
+L2_Deaths = clean_dataframe(L2.get("Deaths"))
+L2_Injuries = clean_dataframe(L2.get("Injuries"))
+L2_Damage =clean_dataframe(L2.get("Damage"))
+
+
