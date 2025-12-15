@@ -2,9 +2,11 @@ import sqlite3
 import pandas as pd
 import numpy as np
 import ast # This library turns string "[...]" into list [...]
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 #1-------
-db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- your path
+db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- database
 conn = sqlite3.connect(db_path)
 
 #2------- 
@@ -303,4 +305,288 @@ L2_Deaths = clean_dataframe(L2.get("Deaths"))
 L2_Injuries = clean_dataframe(L2.get("Injuries"))
 L2_Damage =clean_dataframe(L2.get("Damage"))
 
+#---- Using  Event_ID from ‘L3_*_1900_aggregated’ filter the events from ’ L2_*`, name as ‘L2_*_filter`
+#Extract Event ID from L3
+L3_deaths_ids = L3_Deaths_TC_1900_aggregated["Event_ID"].unique()
+L3_injuries_ids = L3_Injuries_Damage_TC_1900_aggregated["Event_ID"].unique()
+L3_damage_ids = L3_Damage_TC_1900_aggregated["Event_ID"].unique()
 
+#Filter L2 using these Event_ID's from L3
+L2_Deaths_filter = L2_Deaths[L2_Deaths["Event_ID"].isin(L3_deaths_ids)].copy()
+L2_Injuries_filter = L2_Injuries[L2_Injuries["Event_ID"].isin(L3_injuries_ids)].copy()
+L2_Damage_filter = L2_Damage[L2_Damage["Event_ID"].isin(L3_damage_ids)].copy()
+
+#----Using Administrative Area of L3_aggregated and L2_filter, get the same GIS and compute the difference between each impact category 
+# Equation is (‘L3_*_1900_aggregated’/ ‘L2_*_filter`)/ ‘L2_*_filter`.
+
+
+# --- Rename L2 GID column to match L3, AreaS to Area (more prone to error if not changed)
+L2_Deaths_filter = L2_Deaths_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
+L2_Injuries_filter = L2_Injuries_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
+L2_Damage_filter = L2_Damage_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
+
+# --- Merge L3 and L2 on Event_ID + GID ---
+# merged_deaths = L3_Deaths_TC_1900_aggregated.merge(
+#     L2_Deaths_filter,
+#     on=["Event_ID", "Administrative_Area_GID"],
+#     suffixes=("_L3", "_L2")
+#     )
+
+# merged_injuries = L3_Injuries_Damage_TC_1900_aggregated.merge(
+#     L2_Injuries_filter,
+#     on=["Event_ID", "Administrative_Area_GID"],
+#     suffixes=("_L3", "_L2")
+#     )
+
+# merged_damage = L3_Damage_TC_1900_aggregated.merge(
+#     L2_Damage_filter,
+#     on=["Event_ID", "Administrative_Area_GID"],
+#     suffixes=("_L3", "_L2")
+#     )
+
+# --- Merge L3 and L2 ---
+merged_deaths = L3_Deaths_TC_1900_aggregated.merge(
+    L2_Deaths_filter,
+    on=["Event_ID", "Administrative_Area_GID"],
+    suffixes=("_L3", "_L2")
+)
+
+merged_injuries = L3_Injuries_Damage_TC_1900_aggregated.merge(
+    L2_Injuries_filter,
+    on=["Event_ID", "Administrative_Area_GID"],
+    suffixes=("_L3", "_L2")
+)
+
+merged_damage = L3_Damage_TC_1900_aggregated.merge(
+    L2_Damage_filter,
+    on=["Event_ID", "Administrative_Area_GID"],
+    suffixes=("_L3", "_L2")
+)
+
+# --- Keep only the required columns (including both GIDs) ---
+cols_to_keep = [
+    "Event_ID",
+    "Administrative_Area_GID",
+    "Num_Min_L3", "Num_Max_L3", "Num_Approx_L3",
+    "Num_Min_L2", "Num_Max_L2", "Num_Approx_L2"
+]
+
+merged_deaths = merged_deaths[cols_to_keep].copy()
+merged_injuries = merged_injuries[cols_to_keep].copy()
+merged_damage = merged_damage[cols_to_keep].copy()
+
+# Compute relative differences
+def vectorized_rel_diff(df, col):
+    L3 = df[f"{col}_L3"]
+    L2 = df[f"{col}_L2"]
+
+    # Rule 3: If either is NaN → 0
+    cond_nan = L3.isna() | L2.isna()
+
+    # Rule 2: If both zero → 0
+    cond_both_zero = (L3 == 0) & (L2 == 0)
+
+    # Rule 1: If L3 > 0 and L2 = 0 → 1
+    cond_L3_pos_L2_zero = (L3 > 0) & (L2 == 0)
+
+    # Rule 4: Normal case → (L3 - L2) / L2
+    normal_case = (L3 - L2) / L2
+
+    # Build final vector using np.select
+    return np.select(
+        [cond_nan, cond_both_zero, cond_L3_pos_L2_zero],
+        [0,        0,             1],
+        default=normal_case
+    )
+
+impact_columns = ["Num_Min", "Num_Max", "Num_Approx"]
+
+for col in impact_columns:
+    merged_deaths[f"{col}_rel_diff"] = vectorized_rel_diff(merged_deaths, col)
+    merged_injuries[f"{col}_rel_diff"] = vectorized_rel_diff(merged_injuries, col)
+    merged_damage[f"{col}_rel_diff"] = vectorized_rel_diff(merged_damage, col)
+
+# Compute average relative difference per category
+avg_rel_diff_deaths = merged_deaths[[c for c in merged_deaths.columns if "rel_diff" in c]].mean()
+avg_rel_diff_injuries = merged_injuries[[c for c in merged_injuries.columns if "rel_diff" in c]].mean()
+avg_rel_diff_damage = merged_damage[[c for c in merged_damage.columns if "rel_diff" in c]].mean()
+
+# --- Task 7
+
+# Load EM-DAT Excel file
+emdat = pd.read_excel("EMDAT.xlsx", sheet_name="EM-DAT Data")
+
+emdat = emdat[[
+    "ISO",
+    "Start Year", "Start Month",
+    "End Year", "End Month", 'Total Deaths', 'No. Injured', "Total Damage ('000 US$)", "Total Damage, Adjusted ('000 US$)"
+]].copy()
+
+cols_for_matching = [
+    "Event_ID",
+    "Administrative_Area_GID",
+    "Start_Date_Year", "Start_Date_Month",
+    "End_Date_Year", "End_Date_Month",
+    "Num_Min", "Num_Max", "Num_Approx"
+]
+
+L2_Deaths_match = L2_Deaths_filter[cols_for_matching].copy()
+L2_Injuries_match = L2_Injuries_filter[cols_for_matching].copy()
+L2_Damage_match = L2_Damage_filter[cols_for_matching].copy()
+
+match_deaths = L2_Deaths_match.merge(
+    emdat,
+    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
+    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
+    how="inner"
+)
+
+match_injuries = L2_Injuries_match.merge(
+    emdat,
+    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
+    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
+    how="inner"
+)
+
+match_damage = L2_Damage_match.merge(
+    emdat,
+    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
+    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
+    how="inner"
+)
+
+cols_final = [
+    "Event_ID",
+    "ISO",
+    "Administrative_Area_GID",
+    "Start_Date_Year", "Start_Date_Month",
+    "End_Date_Year", "End_Date_Month",
+    "Start Year", "Start Month", "End Year", "End Month",
+    "Num_Min", "Num_Max", "Num_Approx",
+    "Total Deaths",
+    "No. Injured",
+    "Total Damage ('000 US$)",
+    "Total Damage, Adjusted ('000 US$)"
+]
+
+match_deaths = match_deaths[cols_final].copy()
+match_injuries = match_injuries[cols_final].copy()
+match_damage = match_damage[cols_final].copy()
+
+EM_DAT_Wikimapcts_Matched = pd.concat(
+    [match_deaths, match_injuries, match_damage],
+    ignore_index=True
+    )
+
+# --- TASK 7 CONTINUATION ---
+
+def process_and_plot_impacts(df, category_name, emdat_col):
+    """
+    1. Calculates Wikimpacts Mean.
+    2. Calculates Relative Difference vs EM-DAT.
+    3. Categorizes into bins.
+    4. Plots and saves the result.
+    """
+    # Work on a copy to avoid SettingWithCopy warnings
+    df = df.copy()
+
+    # 1. Calculate Wikimpacts Mean (Row-wise mean of Min, Max, Approx)
+    # We use mean(axis=1) which ignores NaNs automatically. 
+    df['Wikimpact_Mean'] = df[['Num_Min', 'Num_Max']].mean(axis=1)
+    
+    # 2. Calculate Relative Difference: (Wikimpacts - EM_DAT) / EM_DAT
+    # We must handle cases where EM_DAT is 0 or NaN to avoid infinite errors.
+    
+    # Extract series for easier handling
+    wiki_val = df['Wikimpact_Mean']
+    emdat_val = df[emdat_col]
+    
+    # Define logic for division
+    # Case A: Both are 0 -> 0 diff (Perfect Match)
+    # Case B: EM_DAT is 0 but Wiki > 0 -> Treat as High Positive (set to 1.0 for binning)
+    # Case C: Standard Formula
+    
+    conditions = [
+        (emdat_val == 0) & (wiki_val == 0), # Both zero
+        (emdat_val == 0) & (wiki_val > 0),  # EM_DAT zero, Wiki positive
+        (emdat_val.isna()) | (wiki_val.isna()) # Missing data
+    ]
+    
+    choices = [
+        0.0,  # Perfect match
+        1.0,  # Arbitrary high number to push it into +50% bin
+        0.0
+    ]
+    
+    # Calculate standard formula
+    standard_calc = (wiki_val - emdat_val) / emdat_val
+    
+    # Apply logic
+    df['Relative_Diff'] = np.select(conditions, choices, default=standard_calc)
+    
+    # Drop rows where we couldn't calculate a difference (NaNs)
+    df = df.dropna(subset=['Relative_Diff'])
+
+    # 3. Sort into 5 categories
+    # Bins: 
+    #   < -0.5       -> -50% less
+    #   -0.5 to -0.3 -> -30% less
+    #   -0.3 to 0.3  -> Perfect Match
+    #   0.3 to 0.5   -> +30% more
+    #   > 0.5        -> +50% more
+    
+    bins = [-np.inf, -0.5, -0.3, 0.3, 0.5, np.inf]
+    labels = ['-50% less', '-30% less', 'Perfect Match', '+30% more', '+50% more']
+    
+    df['Impact_Category'] = pd.cut(df['Relative_Diff'], bins=bins, labels=labels)
+
+    # 4. Visualization
+    plt.figure(figsize=(10, 6))
+    
+    # Count the values for the plot
+    ax = sns.countplot(x='Impact_Category', data=df, palette='viridis', order=labels)
+    
+    # Formatting
+    plt.title(f'Comparison of {category_name}: EM-DAT vs Wikimpacts', fontsize=15)
+    plt.xlabel('Impact Difference Category', fontsize=12)
+    plt.ylabel('Count of Events', fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Add count labels on top of bars
+    for p in ax.patches:
+        ax.annotate(f'{int(p.get_height())}', 
+                    (p.get_x() + p.get_width() / 2., p.get_height()), 
+                    ha = 'center', va = 'center', 
+                    xytext = (0, 9), 
+                    textcoords = 'offset points')
+
+    # Save the plot
+    filename = f"EM_DAT_Wikimpacts_{category_name}_comparison.png"
+    plt.savefig(filename, dpi=300)
+    print(f"Plot saved: {filename}")
+    plt.show() # Optional: Show plot in IDE
+    
+    return df
+
+# --- Execute for each Category ---
+
+print("Processing Deaths...")
+match_deaths_processed = process_and_plot_impacts(
+    match_deaths, 
+    category_name="Deaths", 
+    emdat_col="Total Deaths"
+)
+
+print("Processing Injuries...")
+match_injuries_processed = process_and_plot_impacts(
+    match_injuries, 
+    category_name="Injuries", 
+    emdat_col="No. Injured"
+)
+
+print("Processing Damage...")
+match_damage_processed = process_and_plot_impacts(
+    match_damage, 
+    category_name="Damage", 
+    emdat_col="Total Damage ('000 US$)"
+)
