@@ -387,10 +387,10 @@ def vectorized_rel_diff(df, col):
     cond_both_zero = (L3 == 0) & (L2 == 0)
 
     # Rule 1: If L3 > 0 and L2 = 0 → 1
-    cond_L3_pos_L2_zero = (L3 > 0) & (L2 == 0)
+    cond_L3_pos_L2_zero = (L3 == 0) & (L2 > 0)
 
     # Rule 4: Normal case → (L3 - L2) / L2
-    normal_case = (L3 - L2) / L2
+    normal_case = (L3 - L2) / L3
 
     # Build final vector using np.select
     return np.select(
