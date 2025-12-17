@@ -108,46 +108,42 @@ L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, year_to_filter)
 L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, year_to_filter)
 L3_Damage_TC_1900 = filter_year(L3_Damage_TC, year_to_filter)
 
-#----------5
+#5----------
 
-#1.GID CLEANING FUNCTION (Applied to one cell at a time)
-#def get_single_valid_gid(gid_entry):  # Checks every single GID at a time
-    
-    # 1. Handle empty or missing cells → return NaN
-#    if pd.isna(gid_entry):
-#        return np.nan  # Returns NaN if the cell is truly empty
+# -----GID CLEANING FUNCTION (Applied to one cell at a time) -----
 
-def get_single_valid_gid(gid_entry):
+def get_single_valid_gid(gid_entry):#Checks every single GID at a time
 
-    # 1. Handle empty or missing cells → return NaN
+#Handle empty or missing cells -> return NaN
     if gid_entry is None or (isinstance(gid_entry, float) and np.isnan(gid_entry)):
-        return np.nan
+        return np.nan 
 
-    # 2. Convert strings that LOOK like lists into real Python lists
-    #    Examples:
-    #    "['USA']"      → ['USA']
-    #    "[['USA']]"    → [['USA']]
-    #    "USA"          → stays as "USA"
+    #Convert strings that LOOK like lists into real Python lists
+        #Examples:
+            #    "['USA']"      -> ['USA']
+            #    "[['USA']]"    -> [['USA']]
+            #    "USA"          -> stays as "USA"
     if isinstance(gid_entry, str):
-        try:
-            parsed = ast.literal_eval(gid_entry)  # Safely convert string → Python object
-            # If literal_eval returns a list, use it
-            if isinstance(parsed, list):
-                gid_entry = parsed
+        try: #used ast module, turns strings into lists
+            check_stringorlist = ast.literal_eval(gid_entry)  #convert string to python object
+            # if literal_eval returns a list, use it
+            if isinstance(check_stringorlist, list):
+                gid_entry = check_stringorlist
         except (ValueError, SyntaxError):
             # If literal_eval fails, treat the string as a single element
             gid_entry = [gid_entry]
 
-    # 3. Ensure the entry is ALWAYS treated as a list of strings
-    #    Cases handled:
-    #    - gid_entry = "USA"        → ['USA']
-    #    - gid_entry = ['USA']      → ['USA']
-    #    - gid_entry = [['USA']]    → ['USA']
+    #Ensure the entry is ALWAYS treated as a list of strings
+        #Cases handled:
+    #    gid_entry = "USA"        -> ['USA']
+    #    gid_entry = ['USA']      -> ['USA']
+    #    gid_entry = [['USA']]    -> ['USA']
+    
     if isinstance(gid_entry, str):
-        elements = [gid_entry]  # Wrap single string in a list
+        elements = [gid_entry]  #wrap single string in a list
     else:
-        # If it's a list, flatten and ensure all elements are strings
-        # Example: [['USA']] → ['USA']
+        #If it's a list, flatten and ensure all elements are strings
+        #Example: [['USA']] -> ['USA']
         flat_list = []
         for e in gid_entry:
             if isinstance(e, list):
@@ -270,11 +266,13 @@ def aggregate_by_eventID(df_clean):
     return df_agg
 
 # --- Run Again ---
-# Execute the process on each of your filtered dataframes:
+# Execute the process on each of our filtered dataframes:
 L3_Deaths_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Deaths_TC_1900))
 L3_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Damage_TC_1900))
 L3_Injuries_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Injuries_TC_1900))
 #5------
+
+
 
 #6-------
 
@@ -324,25 +322,6 @@ L2_Damage_filter = L2_Damage[L2_Damage["Event_ID"].isin(L3_damage_ids)].copy()
 L2_Deaths_filter = L2_Deaths_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
 L2_Injuries_filter = L2_Injuries_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
 L2_Damage_filter = L2_Damage_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
-
-# --- Merge L3 and L2 on Event_ID + GID ---
-# merged_deaths = L3_Deaths_TC_1900_aggregated.merge(
-#     L2_Deaths_filter,
-#     on=["Event_ID", "Administrative_Area_GID"],
-#     suffixes=("_L3", "_L2")
-#     )
-
-# merged_injuries = L3_Injuries_Damage_TC_1900_aggregated.merge(
-#     L2_Injuries_filter,
-#     on=["Event_ID", "Administrative_Area_GID"],
-#     suffixes=("_L3", "_L2")
-#     )
-
-# merged_damage = L3_Damage_TC_1900_aggregated.merge(
-#     L2_Damage_filter,
-#     on=["Event_ID", "Administrative_Area_GID"],
-#     suffixes=("_L3", "_L2")
-#     )
 
 # --- Merge L3 and L2 ---
 merged_deaths = L3_Deaths_TC_1900_aggregated.merge(
