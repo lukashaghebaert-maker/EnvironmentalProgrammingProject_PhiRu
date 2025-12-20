@@ -1,16 +1,15 @@
 import sqlite3
 import pandas as pd
-import numpy as np
-import ast # This library turns string "[...]" into list [...]
-import matplotlib.pyplot as plt
-import seaborn as sns
 import data_processing_functions as dpf
+import os
 
-#1-------
-db_path = r"C:\Users\lukas\Documents\GitHub\EnvironmentalProgrammingProject_PhiRu\Data\impactdb.v1.0.2.dg_filled.db"  # <-- database
+#1------- Connecting to Data base using dynamic paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+db_path = os.path.join(project_root, 'Data', 'impactdb.v1.0.2.dg_filled.db')  # <-- database
 conn = sqlite3.connect(db_path)
 
-#2------- 
+#2-------  Reading data from tables and selecting those with total in title
 # List all tables
 tables = pd.read_sql(
     "SELECT name FROM sqlite_master WHERE type='table';", conn)
@@ -28,8 +27,8 @@ for table_name in all_total_tables:
 L1 = pd.concat(L1_list, ignore_index=True)
 
 #2(L3)--------
-spec_tables = tables[tables["name"].str.startswith("Specific")]["name"].tolist()
 
+spec_tables = tables[tables["name"].str.startswith("Specific")]["name"].tolist()
 L3 = {}  # dictionary of category -> dataframe
 
 for table_name in spec_tables: #for each table that starts with specific
@@ -56,11 +55,10 @@ L3_Injuries = L3.get("Injuries")
 L3_Damage = L3.get("Damage")
 
 
-#3-----
+#3----- Filtering for Tropical Storm/Cyclone events
 
 filter_criteria = L1["Main_Event"] == "Tropical Storm/Cyclone"
 L1_TC = L1[filter_criteria].copy() #Copy is very imprtant to ensure original data isn't altered
-
 
 tc_events = L1_TC["Event_ID"].unique()
 
@@ -69,8 +67,7 @@ L3_Injuries_TC = dpf.filter_L3_tc(L3_Injuries, tc_events)
 L3_Damage_TC  = dpf.filter_L3_tc(L3_Damage, tc_events)
 date_cols = [
     "Start_Date_Year", "Start_Date_Month", "Start_Date_Day",
-    "End_Date_Year", "End_Date_Month", "End_Date_Day"
-]
+    "End_Date_Year", "End_Date_Month", "End_Date_Day"]
 
 L1_TC_dates = L1_TC[["Event_ID"] + date_cols].drop_duplicates()
 
@@ -78,25 +75,19 @@ L3_Deaths_TC = dpf.fill_dates(L3_Deaths_TC, L1_TC_dates, date_cols)
 L3_Injuries_TC = dpf.fill_dates(L3_Injuries_TC, L1_TC_dates, date_cols)
 L3_Damage_TC = dpf.fill_dates(L3_Damage_TC, L1_TC_dates, date_cols)
 
-
-
-#4---------- Aggregate by Administrative Area
+#4---------- Filtering by year
         
 year_to_filter = 1900
 L3_Deaths_TC_1900 = dpf.filter_year(L3_Deaths_TC, year_to_filter)
 L3_Injuries_TC_1900 = dpf.filter_year(L3_Injuries_TC, year_to_filter)
 L3_Damage_TC_1900 = dpf.filter_year(L3_Damage_TC, year_to_filter)
 
-#5----------
-
+#5---------- Aggregate by Administrative Area
 
 # Execute the process on each of our filtered dataframes:
 L3_Deaths_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Deaths_TC_1900))
 L3_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Damage_TC_1900))
 L3_Injuries_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Injuries_TC_1900))
-#5------
-
-
 
 #6-------
 
@@ -194,7 +185,7 @@ avg_rel_diff_damage = merged_damage[[c for c in merged_damage.columns if "rel_di
 # --- Task 7
 
 # Load EM-DAT Excel file
-emdat = pd.read_excel(r"C:\Users\lukas\Documents\GitHub\EnvironmentalProgrammingProject_PhiRu\Data\EMDAT.xlsx", sheet_name="EM-DAT Data")
+emdat = pd.read_excel(os.path.join(project_root, 'Data', 'EMDAT.xlsx'),sheet_name="EM-DAT Data")
 
 emdat = emdat[[
     "ISO",
@@ -218,22 +209,19 @@ match_deaths = L2_Deaths_match.merge(
     emdat,
     left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
     right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
+    how="inner")
 
 match_injuries = L2_Injuries_match.merge(
     emdat,
     left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
     right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
+    how="inner")
 
 match_damage = L2_Damage_match.merge(
     emdat,
     left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
     right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
+    how="inner")
 
 cols_final = [
     "Event_ID",
@@ -246,8 +234,7 @@ cols_final = [
     "Total Deaths",
     "No. Injured",
     "Total Damage ('000 US$)",
-    "Total Damage, Adjusted ('000 US$)"
-]
+    "Total Damage, Adjusted ('000 US$)"]
 
 match_deaths = match_deaths[cols_final].copy()
 match_injuries = match_injuries[cols_final].copy()
@@ -255,8 +242,7 @@ match_damage = match_damage[cols_final].copy()
 
 EM_DAT_Wikimapcts_Matched = pd.concat(
     [match_deaths, match_injuries, match_damage],
-    ignore_index=True
-    )
+    ignore_index=True)
 
 
 # --- Execute for each Category ---

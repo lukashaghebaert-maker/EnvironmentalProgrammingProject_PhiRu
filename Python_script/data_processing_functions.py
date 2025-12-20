@@ -9,6 +9,7 @@ import pandas as pd
 import ast # This library turns string "[...]" into list [...]
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
 # ------------ USED IN TASK 3 ------------ 
 def filter_L3_tc(df, tc_events):
@@ -340,7 +341,7 @@ def rel_diff_between_data_levels(df, col):
         [0,        0,             1],
         default=normal_case)
 
-# ------------ USED IN TASK 7 ------------ 
+# ------------ USED IN TASK 7 ------------
 def process_and_plot_impacts(df, category_name, emdat_col):
     """
     Calculate Wikimpacts mean, compare against EM-DAT, categorize differences, and plot results.
@@ -365,7 +366,7 @@ def process_and_plot_impacts(df, category_name, emdat_col):
         ValueError: If EM-DAT values contain zeros leading to invalid relative difference calculations.
     """
     df = df.copy()
-
+    
     # 1. Calculate Wikimpacts Mean (Row-wise mean of Min, Max, Approx)
     # We use mean(axis=1) which ignores NaNs automatically. 
     df['Wikimpact_Mean'] = df[['Num_Min', 'Num_Max']].mean(axis=1)
@@ -420,7 +421,7 @@ def process_and_plot_impacts(df, category_name, emdat_col):
     plt.figure(figsize=(10, 6))
     
     # Count the values for the plot
-    ax = sns.countplot(x='Impact_Category', data=df, palette='viridis', order=labels)
+    ax = sns.countplot(x='Impact_Category', data=df, hue='Impact_Category', legend=False, palette='viridis', order=labels, dodge=False)
     
     # Formatting
     plt.title(f'Comparison of {category_name}: EM-DAT vs Wikimpacts', fontsize=15)
@@ -437,9 +438,14 @@ def process_and_plot_impacts(df, category_name, emdat_col):
                     textcoords = 'offset points')
 
     # Save the plot
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
     filename = f"EM_DAT_Wikimpacts_{category_name}_comparison.png"
-    plt.savefig(filename, dpi=300)
+    image_path = os.path.join(project_root, 'Images', filename)
+
+    plt.savefig(image_path, dpi=300)
     print(f"Plot saved: {filename}")
-    plt.show() # Optional: Show plot in IDE
+    #plt.show() # Optional: Show plot in IDE
     
     return df
