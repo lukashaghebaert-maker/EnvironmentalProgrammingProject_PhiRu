@@ -1,69 +1,17 @@
-import sqlite3
-import pandas as pd
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec 18 18:33:01 2025
+
+@author: lukas
+"""
 import numpy as np
+import pandas as pd
 import ast # This library turns string "[...]" into list [...]
 import matplotlib.pyplot as plt
 import seaborn as sns
-import data_processing_functions
+import os
 
-#1-------
-db_path = "impactdb.v1.0.2.dg_filled.db"  # <-- database
-conn = sqlite3.connect(db_path)
-
-#2------- 
-# List all tables
-tables = pd.read_sql(
-    "SELECT name FROM sqlite_master WHERE type='table';", conn)
-
-all_total_tables = tables[tables["name"].str.startswith("Total")]["name"]
-
-#2(L1)-------
-# Concatenate to one big L1 dataframe
-L1_list = []
-for table_name in all_total_tables:
-    df = pd.read_sql(f"SELECT * FROM {table_name};", conn)
-    df["source_table"] = table_name
-    L1_list.append(df)
-
-L1 = pd.concat(L1_list, ignore_index=True)
-
-#2(L3)--------
-spec_tables = tables[tables["name"].str.startswith("Specific")]["name"].tolist()
-
-L3 = {}  # dictionary of category -> dataframe
-
-for table_name in spec_tables: #for each table that starts with specific
-    #classifyinging tables into three impacts deaths, injuries & damage
-    if "Deaths" in table_name:
-        category = "Deaths"
-    elif "Injuries" in table_name:
-        category = "Injuries"
-    elif "Damage" in table_name:
-        category = "Damage"
-    else:
-        continue
-
-    df = pd.read_sql(f"SELECT * FROM {table_name};", conn)
-    df["source_table"] = table_name
-    L3.setdefault(category, []).append(df)
-
-# Get only Deaths, Injuries and Damage
-for category in L3:
-    L3[category] = pd.concat(L3[category], ignore_index=True)
-
-L3_Deaths = L3.get("Deaths")
-L3_Injuries = L3.get("Injuries")
-L3_Damage = L3.get("Damage")
-
-
-#3-----
-
-filter_criteria = L1["Main_Event"] == "Tropical Storm/Cyclone"
-L1_TC = L1[filter_criteria].copy() #Copy is very imprtant to ensure original data isn't altered
-
-
-tc_events = L1_TC["Event_ID"].unique()
-
+# ------------ USED IN TASK 3 ------------ 
 def filter_L3_tc(df, tc_events):
     """
     Filter a DataFrame to include only level-3 tropical cyclone events.
@@ -84,18 +32,6 @@ def filter_L3_tc(df, tc_events):
         KeyError: If the 'Event_ID' column is not present in the DataFrame.
     """
     return df[df["Event_ID"].isin(tc_events)].copy()
-
-L3_Deaths_TC = filter_L3_tc(L3_Deaths, tc_events)
-L3_Injuries_TC = filter_L3_tc(L3_Injuries, tc_events)
-L3_Damage_TC  = filter_L3_tc(L3_Damage, tc_events)
-date_cols = [
-    "Start_Date_Year", "Start_Date_Month", "Start_Date_Day",
-    "End_Date_Year", "End_Date_Month", "End_Date_Day"
-]
-
-L1_TC_dates = L1_TC[["Event_ID"] + date_cols].drop_duplicates()
-
-
 
 def fill_dates(L3_tc, L1_TC_dates, date_cols):
     """
@@ -125,15 +61,7 @@ def fill_dates(L3_tc, L1_TC_dates, date_cols):
         merged.drop(columns=[f"{col}_L1"], inplace=True)
     return merged
 
-
-
-L3_Deaths_TC = fill_dates(L3_Deaths_TC, L1_TC_dates, date_cols)
-L3_Injuries_TC = fill_dates(L3_Injuries_TC, L1_TC_dates, date_cols)
-L3_Damage_TC = fill_dates(L3_Damage_TC, L1_TC_dates, date_cols)
-
-
-
-#4---------- Aggregate by Administrative Area
+#------------ USED IN TASK 4 ------------ 
 def filter_year(df, year):
     
     """
@@ -161,15 +89,7 @@ def filter_year(df, year):
     else:
         print ("Year must be an int data type")
         
-year_to_filter = 1900
-L3_Deaths_TC_1900 = filter_year(L3_Deaths_TC, year_to_filter)
-L3_Injuries_TC_1900 = filter_year(L3_Injuries_TC, year_to_filter)
-L3_Damage_TC_1900 = filter_year(L3_Damage_TC, year_to_filter)
-
-#5----------
-
-# -----GID CLEANING FUNCTION (Applied to one cell at a time) -----
-
+# ------------ USED IN TASK 5 ------------ 
 def get_single_valid_gid(gid_entry):#Checks every single GID at a time
     """
     Extract a single valid 3-letter country GID from a raw entry.
@@ -251,7 +171,6 @@ def get_single_valid_gid(gid_entry):#Checks every single GID at a time
     else:
         return np.nan  # If zero or multiple codes found → discard row
 
-# --- MAIN PROCESSING AND AGGREGATION FUNCTION ---
 def clean_dataframe(df):
     
     """
@@ -381,96 +300,7 @@ def aggregate_by_eventID(df_clean):
     
     return df_agg
 
-# --- Run Again ---
-# Execute the process on each of our filtered dataframes:
-L3_Deaths_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Deaths_TC_1900))
-L3_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Damage_TC_1900))
-L3_Injuries_Damage_TC_1900_aggregated = aggregate_by_eventID(clean_dataframe(L3_Injuries_TC_1900))
-#5------
-
-
-
-#6-------
-
-instance_tables = tables[tables["name"].str.startswith("Instance")]["name"].tolist()
-
-L2 = {}  # dictionary of category -> dataframe
-
-for table_name in instance_tables: #for each table that starts with instance
-    #classifyinging tables into three impacts deaths, injuries & damage
-    if "Deaths" in table_name:
-        category = "Deaths"
-    elif "Injuries" in table_name:
-        category = "Injuries"
-    elif "Damage" in table_name:
-        category = "Damage"
-    else:
-        continue
-
-    df = pd.read_sql(f"SELECT * FROM {table_name};", conn)
-    df["source_table"] = table_name
-    L2.setdefault(category, []).append(df)
-
-# Get only Deaths, Injuries and Damage
-for category in L2:
-    L2[category] = pd.concat(L2[category], ignore_index=True)
-
-L2_Deaths = clean_dataframe(L2.get("Deaths"))
-L2_Injuries = clean_dataframe(L2.get("Injuries"))
-L2_Damage =clean_dataframe(L2.get("Damage"))
-
-#---- Using  Event_ID from ‘L3_*_1900_aggregated’ filter the events from ’ L2_*`, name as ‘L2_*_filter`
-#Extract Event ID from L3
-L3_deaths_ids = L3_Deaths_TC_1900_aggregated["Event_ID"].unique()
-L3_injuries_ids = L3_Injuries_Damage_TC_1900_aggregated["Event_ID"].unique()
-L3_damage_ids = L3_Damage_TC_1900_aggregated["Event_ID"].unique()
-
-#Filter L2 using these Event_ID's from L3
-L2_Deaths_filter = L2_Deaths[L2_Deaths["Event_ID"].isin(L3_deaths_ids)].copy()
-L2_Injuries_filter = L2_Injuries[L2_Injuries["Event_ID"].isin(L3_injuries_ids)].copy()
-L2_Damage_filter = L2_Damage[L2_Damage["Event_ID"].isin(L3_damage_ids)].copy()
-
-#----Using Administrative Area of L3_aggregated and L2_filter, get the same GIS and compute the difference between each impact category 
-# Equation is (‘L3_*_1900_aggregated’/ ‘L2_*_filter`)/ ‘L2_*_filter`.
-
-
-# --- Rename L2 GID column to match L3, AreaS to Area (more prone to error if not changed)
-L2_Deaths_filter = L2_Deaths_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
-L2_Injuries_filter = L2_Injuries_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
-L2_Damage_filter = L2_Damage_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
-
-# --- Merge L3 and L2 ---
-merged_deaths = L3_Deaths_TC_1900_aggregated.merge(
-    L2_Deaths_filter,
-    on=["Event_ID", "Administrative_Area_GID"],
-    suffixes=("_L3", "_L2")
-)
-
-merged_injuries = L3_Injuries_Damage_TC_1900_aggregated.merge(
-    L2_Injuries_filter,
-    on=["Event_ID", "Administrative_Area_GID"],
-    suffixes=("_L3", "_L2")
-)
-
-merged_damage = L3_Damage_TC_1900_aggregated.merge(
-    L2_Damage_filter,
-    on=["Event_ID", "Administrative_Area_GID"],
-    suffixes=("_L3", "_L2")
-)
-
-# --- Keep only the required columns (including both GIDs) ---
-cols_to_keep = [
-    "Event_ID",
-    "Administrative_Area_GID",
-    "Num_Min_L3", "Num_Max_L3", "Num_Approx_L3",
-    "Num_Min_L2", "Num_Max_L2", "Num_Approx_L2"
-]
-
-merged_deaths = merged_deaths[cols_to_keep].copy()
-merged_injuries = merged_injuries[cols_to_keep].copy()
-merged_damage = merged_damage[cols_to_keep].copy()
-
-# Compute relative differences
+# ------------ USED IN TASK 6 ------------ 
 def rel_diff_between_data_levels(df, col):
     '''
     Compute the relative difference between level 3 and level 2 data.
@@ -511,87 +341,7 @@ def rel_diff_between_data_levels(df, col):
         [0,        0,             1],
         default=normal_case)
 
-impact_columns = ["Num_Min", "Num_Max", "Num_Approx"]
-
-for col in impact_columns:
-    merged_deaths[f"{col}_rel_diff"] = rel_diff_between_data_levels(merged_deaths, col)
-    merged_injuries[f"{col}_rel_diff"] = rel_diff_between_data_levels(merged_injuries, col)
-    merged_damage[f"{col}_rel_diff"] = rel_diff_between_data_levels(merged_damage, col)
-
-# Compute average relative difference per category
-avg_rel_diff_deaths = merged_deaths[[c for c in merged_deaths.columns if "rel_diff" in c]].mean()
-avg_rel_diff_injuries = merged_injuries[[c for c in merged_injuries.columns if "rel_diff" in c]].mean()
-avg_rel_diff_damage = merged_damage[[c for c in merged_damage.columns if "rel_diff" in c]].mean()
-
-# --- Task 7
-
-# Load EM-DAT Excel file
-emdat = pd.read_excel("EMDAT.xlsx", sheet_name="EM-DAT Data")
-
-emdat = emdat[[
-    "ISO",
-    "Start Year", "Start Month",
-    "End Year", "End Month", 'Total Deaths', 'No. Injured', "Total Damage ('000 US$)", "Total Damage, Adjusted ('000 US$)"
-]].copy()
-
-cols_for_matching = [
-    "Event_ID",
-    "Administrative_Area_GID",
-    "Start_Date_Year", "Start_Date_Month",
-    "End_Date_Year", "End_Date_Month",
-    "Num_Min", "Num_Max", "Num_Approx"
-]
-
-L2_Deaths_match = L2_Deaths_filter[cols_for_matching].copy()
-L2_Injuries_match = L2_Injuries_filter[cols_for_matching].copy()
-L2_Damage_match = L2_Damage_filter[cols_for_matching].copy()
-
-match_deaths = L2_Deaths_match.merge(
-    emdat,
-    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
-    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
-
-match_injuries = L2_Injuries_match.merge(
-    emdat,
-    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
-    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
-
-match_damage = L2_Damage_match.merge(
-    emdat,
-    left_on=["Administrative_Area_GID", "Start_Date_Year", "Start_Date_Month", "End_Date_Year", "End_Date_Month"],
-    right_on=["ISO", "Start Year", "Start Month", "End Year", "End Month"],
-    how="inner"
-)
-
-cols_final = [
-    "Event_ID",
-    "ISO",
-    "Administrative_Area_GID",
-    "Start_Date_Year", "Start_Date_Month",
-    "End_Date_Year", "End_Date_Month",
-    "Start Year", "Start Month", "End Year", "End Month",
-    "Num_Min", "Num_Max", "Num_Approx",
-    "Total Deaths",
-    "No. Injured",
-    "Total Damage ('000 US$)",
-    "Total Damage, Adjusted ('000 US$)"
-]
-
-match_deaths = match_deaths[cols_final].copy()
-match_injuries = match_injuries[cols_final].copy()
-match_damage = match_damage[cols_final].copy()
-
-EM_DAT_Wikimapcts_Matched = pd.concat(
-    [match_deaths, match_injuries, match_damage],
-    ignore_index=True
-    )
-
-# --- TASK 7 CONTINUATION ---
-
+# ------------ USED IN TASK 7 ------------
 def process_and_plot_impacts(df, category_name, emdat_col):
     """
     Calculate Wikimpacts mean, compare against EM-DAT, categorize differences, and plot results.
@@ -616,7 +366,7 @@ def process_and_plot_impacts(df, category_name, emdat_col):
         ValueError: If EM-DAT values contain zeros leading to invalid relative difference calculations.
     """
     df = df.copy()
-
+    
     # 1. Calculate Wikimpacts Mean (Row-wise mean of Min, Max, Approx)
     # We use mean(axis=1) which ignores NaNs automatically. 
     df['Wikimpact_Mean'] = df[['Num_Min', 'Num_Max']].mean(axis=1)
@@ -671,7 +421,7 @@ def process_and_plot_impacts(df, category_name, emdat_col):
     plt.figure(figsize=(10, 6))
     
     # Count the values for the plot
-    ax = sns.countplot(x='Impact_Category', data=df, palette='viridis', order=labels)
+    ax = sns.countplot(x='Impact_Category', data=df, hue='Impact_Category', legend=False, palette='viridis', order=labels, dodge=False)
     
     # Formatting
     plt.title(f'Comparison of {category_name}: EM-DAT vs Wikimpacts', fontsize=15)
@@ -688,32 +438,14 @@ def process_and_plot_impacts(df, category_name, emdat_col):
                     textcoords = 'offset points')
 
     # Save the plot
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
     filename = f"EM_DAT_Wikimpacts_{category_name}_comparison.png"
-    plt.savefig(filename, dpi=300)
+    image_path = os.path.join(project_root, 'Images', filename)
+
+    plt.savefig(image_path, dpi=300)
     print(f"Plot saved: {filename}")
-    plt.show() # Optional: Show plot in IDE
+    #plt.show() # Optional: Show plot in IDE
     
     return df
-
-# --- Execute for each Category ---
-
-print("Processing Deaths...")
-match_deaths_processed = process_and_plot_impacts(
-    match_deaths, 
-    category_name="Deaths", 
-    emdat_col="Total Deaths"
-)
-
-print("Processing Injuries...")
-match_injuries_processed = process_and_plot_impacts(
-    match_injuries, 
-    category_name="Injuries", 
-    emdat_col="No. Injured"
-)
-
-print("Processing Damage...")
-match_damage_processed = process_and_plot_impacts(
-    match_damage, 
-    category_name="Damage", 
-    emdat_col="Total Damage, Adjusted ('000 US$)"
-)
