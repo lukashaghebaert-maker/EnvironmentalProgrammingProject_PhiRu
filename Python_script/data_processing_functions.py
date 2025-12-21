@@ -155,8 +155,8 @@ def get_single_valid_gid(gid_entry):#Checks every single GID at a time
     for e in elements:  # Loop through every cleaned element
         # Clean formatting: remove whitespace, take first 3 chars, force UPPERCASE
         # Examples:
-        #   'AUS.10' → 'AUS'
-        #   'chn'    → 'CHN'
+        #   'AUS.10' -> 'AUS'
+        #   'chn'    -> 'CHN'
         code = e.strip()[:3].upper()
 
         # Validation rule:
@@ -167,9 +167,9 @@ def get_single_valid_gid(gid_entry):#Checks every single GID at a time
     # 5. Enforce "Single Valid GID"
     #    Only accept rows with EXACTLY ONE valid country code
     if len(valid_codes) == 1:
-        return valid_codes[0]  # Return the clean code (e.g., 'CHN')
+        return valid_codes[0]  # Return the clean code (ex: 'CHN')
     else:
-        return np.nan  # If zero or multiple codes found → discard row
+        return np.nan  # If zero or multiple codes found -> discard row
 
 def clean_dataframe(df):
     
@@ -209,17 +209,17 @@ def clean_dataframe(df):
     elif 'Administrative_Areas_GID' in df_clean.columns:
         target_col = 'Administrative_Areas_GID'
 
-        #Step 1: Convert string "[['USA']]" → [['USA']]
+        #Step 1: Convert string "[['USA']]" -> [['USA']]
         df_clean[target_col] = df_clean[target_col].apply(
             lambda x: ast.literal_eval(x) if isinstance(x, str) else x
         )
 
-        #Step 2: Flatten [['USA']] → ['USA']
+        #Step 2: Flatten [['USA']] -> ['USA']
         df_clean[target_col] = df_clean[target_col].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else x
         )
 
-        #Step 3: Convert ['USA'] → "['USA']" (string)
+        #Step 3: Convert ['USA'] -> "['USA']" (string)
         df_clean[target_col] = df_clean[target_col].apply(
             lambda x: str([x]) if isinstance(x, str) else x
         )
@@ -323,16 +323,16 @@ def rel_diff_between_data_levels(df, col):
     L3 = df[f"{col}_L3"]
     L2 = df[f"{col}_L2"]
 
-    # Rule 3: If either is NaN → 0
+    # Rule 3: If either is NaN -> 0
     cond_nan = L3.isna() | L2.isna()
 
-    # Rule 2: If both zero → 0
+    # Rule 2: If both zero -> 0
     cond_both_zero = (L3 == 0) & (L2 == 0)
 
-    # Rule 1: If L3 > 0 and L2 = 0 → 1
+    # Rule 1: If L3 > 0 and L2 = 0 -> 1
     cond_L3_pos_L2_zero = (L3 > 0) & (L2 == 0)
 
-    # Rule 4: Normal case → (L3 - L2) / L2
+    # Rule 4: Normal case -> (L3 - L2) / L2
     normal_case = (L3 - L2) / L2
 
     # Build final vector using np.select
