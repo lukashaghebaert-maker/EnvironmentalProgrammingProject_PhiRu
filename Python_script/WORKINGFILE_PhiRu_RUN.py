@@ -89,7 +89,7 @@ L3_Deaths_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_D
 L3_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Damage_TC_1900))
 L3_Injuries_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Injuries_TC_1900))
 
-#6-------
+#6------- Task 6
 
 instance_tables = tables[tables["name"].str.startswith("Instance")]["name"].tolist()
 
