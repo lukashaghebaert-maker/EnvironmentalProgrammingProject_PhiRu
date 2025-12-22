@@ -1,4 +1,4 @@
-conda env create -f PhiRuProject_Win.yml
+conda env create -f PhiRuProject.yml
 
 (FILE MUST BE IN THE SAME DIRECTORY!)
 
