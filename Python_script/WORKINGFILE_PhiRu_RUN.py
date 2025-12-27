@@ -89,7 +89,7 @@ L3_Deaths_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_D
 L3_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Damage_TC_1900))
 L3_Injuries_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Injuries_TC_1900))
 
-#6-------
+#6------- Task 6
 
 instance_tables = tables[tables["name"].str.startswith("Instance")]["name"].tolist()
 
@@ -129,9 +129,8 @@ L2_Deaths_filter = L2_Deaths[L2_Deaths["Event_ID"].isin(L3_deaths_ids)].copy()
 L2_Injuries_filter = L2_Injuries[L2_Injuries["Event_ID"].isin(L3_injuries_ids)].copy()
 L2_Damage_filter = L2_Damage[L2_Damage["Event_ID"].isin(L3_damage_ids)].copy()
 
-#----Using Administrative Area of L3_aggregated and L2_filter, get the same GIS and compute the difference between each impact category 
+#----computing the relative difference between each impact category 
 # Equation is (‘L3_*_1900_aggregated’/ ‘L2_*_filter`)/ ‘L2_*_filter`.
-
 
 # --- Rename L2 GID column to match L3, AreaS to Area (more prone to error if not changed)
 L2_Deaths_filter = L2_Deaths_filter.rename(columns={"Administrative_Areas_GID": "Administrative_Area_GID"})
@@ -157,7 +156,7 @@ merged_damage = L3_Damage_TC_1900_aggregated.merge(
     suffixes=("_L3", "_L2")
 )
 
-# --- Keep only the required columns (including both GIDs) ---
+# --- Keep only the required columns
 cols_to_keep = [
     "Event_ID",
     "Administrative_Area_GID",
