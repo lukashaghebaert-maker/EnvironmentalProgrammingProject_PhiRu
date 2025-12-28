@@ -99,7 +99,8 @@ class AnalysisApp:
             self.image_paths = backend.run_analysis(s_year)
             self.root.after(0, self.analysis_complete)
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+            error_msg = str(e)
+            self.root.after(0, lambda: messagebox.showerror("Error", error_msg))
             self.root.after(0, lambda: self.status_var.set("Error occurred."))
             self.root.after(0, lambda: self.run_btn.config(state="normal"))
 

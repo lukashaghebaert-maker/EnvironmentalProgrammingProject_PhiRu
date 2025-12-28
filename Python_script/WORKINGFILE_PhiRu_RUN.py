@@ -5,13 +5,13 @@ import os
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
-#1------- Connecting to Data base using dynamic paths
+# Task 1------- Connecting to Data base using dynamic paths
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 db_path = os.path.join(project_root, 'Data', 'impactdb.v1.0.2.dg_filled.db')  # <-- database
 conn = sqlite3.connect(db_path)
 
-#2-------  Reading data from tables and selecting those with total in title
+# Task 2-------  Reading data from tables and selecting those with total in title
 # List all tables
 tables = pd.read_sql(
     "SELECT name FROM sqlite_master WHERE type='table';", conn)
@@ -57,7 +57,7 @@ L3_Injuries = L3.get("Injuries")
 L3_Damage = L3.get("Damage")
 
 
-#3----- Filtering for Tropical Storm/Cyclone events
+# Task 3----- Filtering for Tropical Storm/Cyclone events
 
 filter_criteria = L1["Main_Event"] == "Tropical Storm/Cyclone"
 L1_TC = L1[filter_criteria].copy() #Copy is very imprtant to ensure original data isn't altered
@@ -77,21 +77,21 @@ L3_Deaths_TC = dpf.fill_dates(L3_Deaths_TC, L1_TC_dates, date_cols)
 L3_Injuries_TC = dpf.fill_dates(L3_Injuries_TC, L1_TC_dates, date_cols)
 L3_Damage_TC = dpf.fill_dates(L3_Damage_TC, L1_TC_dates, date_cols)
 
-#4---------- Filtering by year
+# Task 4---------- Filtering by year
         
 year_to_filter = 1900
 L3_Deaths_TC_1900 = dpf.filter_year(L3_Deaths_TC, year_to_filter)
 L3_Injuries_TC_1900 = dpf.filter_year(L3_Injuries_TC, year_to_filter)
 L3_Damage_TC_1900 = dpf.filter_year(L3_Damage_TC, year_to_filter)
 
-#5---------- Aggregate by Administrative Area
+# Task 5---------- Aggregate by Administrative Area
 
 # Execute the process on each of our filtered dataframes:
 L3_Deaths_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Deaths_TC_1900))
 L3_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Damage_TC_1900))
 L3_Injuries_Damage_TC_1900_aggregated = dpf.aggregate_by_eventID(dpf.clean_dataframe(L3_Injuries_TC_1900))
 
-#6------- Task 6
+# Task 6------- 
 
 instance_tables = tables[tables["name"].str.startswith("Instance")]["name"].tolist()
 
@@ -183,7 +183,7 @@ avg_rel_diff_deaths = merged_deaths[[c for c in merged_deaths.columns if "rel_di
 avg_rel_diff_injuries = merged_injuries[[c for c in merged_injuries.columns if "rel_diff" in c]].mean()
 avg_rel_diff_damage = merged_damage[[c for c in merged_damage.columns if "rel_diff" in c]].mean()
 
-# --- Task 7
+# Task 7 -------
 
 # Load EM-DAT Excel file
 emdat = pd.read_excel(os.path.join(project_root, 'Data', 'EMDAT.xlsx'),sheet_name="EM-DAT Data")
@@ -269,7 +269,7 @@ match_damage_processed = dpf.process_and_plot_impacts(
     emdat_col="Total Damage, Adjusted ('000 US$)"
 )
 
-# --- Task 8
+# Task 8 -----------
 #Spatial Analysis
 spatial_results = dpf.process_and_plot_spatial_differences(
     emdat,
