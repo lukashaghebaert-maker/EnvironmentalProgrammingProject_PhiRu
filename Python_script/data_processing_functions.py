@@ -10,6 +10,7 @@ import ast # This library turns string "[...]" into list [...]
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import geopandas as gpd
 
 # ------------ USED IN TASK 3 ------------ 
 def filter_L3_tc(df, tc_events):
@@ -449,3 +450,93 @@ def process_and_plot_impacts(df, category_name, emdat_col):
     #plt.show() # Optional: Show plot in IDE
     
     return df
+# ------------ USED IN TASK 8 ------------
+def process_and_plot_spatial_differences(emdat, L2_Deaths_filter, L2_Injuries_filter, L2_Damage_filter):
+    """
+    Computes country-level differences between EM-DAT and Wikimpacts
+    and generates a global spatial comparison map.
+
+    Saves the figure into the Images folder.
+    """
+
+    # 1. Aggregate EM-DAT impacts by country
+    emdat_country_counts = (
+        emdat.groupby("ISO")
+        .size()
+        .reset_index(name="emdat_count")
+    )
+
+    # 2. Aggregate Wikimpacts impacts by country
+    wikimpacts_country_counts = pd.concat(
+        [
+            L2_Deaths_filter[["Administrative_Area_GID"]],
+            L2_Injuries_filter[["Administrative_Area_GID"]],
+            L2_Damage_filter[["Administrative_Area_GID"]]
+        ],
+        ignore_index=True
+    )
+
+    wikimpacts_country_counts = (
+        wikimpacts_country_counts
+        .groupby("Administrative_Area_GID")
+        .size()
+        .reset_index(name="wikimpacts_count")
+        .rename(columns={"Administrative_Area_GID": "ISO"})
+    )
+
+    # 3. Merge EM-DAT and Wikimpacts
+    spatial_comparison = emdat_country_counts.merge(
+        wikimpacts_country_counts,
+        on="ISO",
+        how="outer"
+    ).fillna(0)
+
+    # 4. Compute difference
+    spatial_comparison["difference"] = (
+        spatial_comparison["wikimpacts_count"] -
+        spatial_comparison["emdat_count"]
+    )
+
+    # 5. Load world geometry
+    world = gpd.read_file(
+        "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip"
+    )
+
+    # 6. Merge with world map
+    world_map = world.merge(
+        spatial_comparison,
+        left_on="ISO_A3",
+        right_on="ISO",
+        how="left"
+    )
+
+    # 7. Plot
+    fig, ax = plt.subplots(1, 1, figsize=(16, 9))
+
+    world_map.plot(
+        column="difference",
+        cmap="coolwarm",
+        linewidth=0.4,
+        edgecolor="black",
+        legend=True,
+        legend_kwds={"label": "Wikimpacts − EM-DAT"},
+        missing_kwds={"color": "lightgrey"},
+        ax=ax
+    )
+
+    ax.set_title(
+        "Spatial Differences Between EM-DAT and Wikimpacts\n(Tropical Cyclone Impacts)",
+        fontsize=16
+    )
+    ax.axis("off")
+
+    # 8. Save figure
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    filename = "EM_DAT_Wikimpacts_Spatial_Global_comparison.png"
+    image_path = os.path.join(project_root, "Images", filename)
+
+    plt.savefig(image_path, dpi=300, bbox_inches="tight")
+    print(f"Spatial plot saved: {filename}")
+
+    return spatial_comparison

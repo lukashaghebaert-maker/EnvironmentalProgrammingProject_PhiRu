@@ -62,6 +62,9 @@ class AnalysisApp:
         self.view_damage_btn = ttk.Button(self.btn_frame, text="View Damage", state="disabled", command=lambda: self.show_image("Damage"))
         self.view_damage_btn.pack(side="left", padx=5)
 
+        self.view_spatial_btn = ttk.Button(self.btn_frame, text="View Spatial Map", state="disabled",command=lambda: self.show_image("Spatial"))
+        self.view_spatial_btn.pack(side="left", padx=5)
+
         # 3. Image Display Area
         self.image_canvas = tk.Label(root, text="Run analysis to generate graphs", bg="#f0f0f0")
         self.image_canvas.pack(side="top", fill="both", expand=True, padx=20, pady=20)
@@ -109,6 +112,9 @@ class AnalysisApp:
         self.view_deaths_btn.config(state="normal")
         self.view_injuries_btn.config(state="normal")
         self.view_damage_btn.config(state="normal")
+        self.view_spatial_btn.config(state="normal")
+        
+        
         
         # Show the first image automatically
         self.show_image("Deaths")

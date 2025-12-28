@@ -2,6 +2,8 @@ import sqlite3
 import pandas as pd
 import data_processing_functions as dpf
 import os
+import geopandas as gpd
+
 
 def run_analysis(filter_year):
     #1------- Connecting to Data base using dynamic paths
@@ -269,11 +271,20 @@ def run_analysis(filter_year):
         emdat_col="Total Damage, Adjusted ('000 US$)"
     )
     
+        # Task 8 spatial map
+    print("Processing Spatial Map...")
+    spatial_path = dpf.process_and_plot_spatial_differences(
+        emdat,
+        L2_Deaths_filter,
+        L2_Injuries_filter,
+        L2_Damage_filter
+    )
+
     image_dir = os.path.join(project_root, 'Images')
     return {
         "Deaths": os.path.join(image_dir, "EM_DAT_Wikimpacts_Deaths_comparison.png"),
         "Injuries": os.path.join(image_dir, "EM_DAT_Wikimpacts_Injuries_comparison.png"),
-        "Damage": os.path.join(image_dir, "EM_DAT_Wikimpacts_Damage_comparison.png") }
-
+        "Damage": os.path.join(image_dir, "EM_DAT_Wikimpacts_Damage_comparison.png"), 
+        "Spatial": os.path.join(image_dir, "EM_DAT_Wikimpacts_Spatial_Global_comparison.png")}
 if __name__ == "__main__":
     run_analysis()
