@@ -2,6 +2,8 @@ import sqlite3
 import pandas as pd
 import data_processing_functions as dpf
 import os
+import geopandas as gpd
+import matplotlib.pyplot as plt
 
 #1------- Connecting to Data base using dynamic paths
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -265,4 +267,13 @@ match_damage_processed = dpf.process_and_plot_impacts(
     match_damage, 
     category_name="Damage", 
     emdat_col="Total Damage, Adjusted ('000 US$)"
+)
+
+# --- Task 8
+#Spatial Analysis
+spatial_results = dpf.process_and_plot_spatial_differences(
+    emdat,
+    L2_Deaths_filter,
+    L2_Injuries_filter,
+    L2_Damage_filter
 )
